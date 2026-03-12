@@ -21,7 +21,7 @@ const [copyFeedback, setCopyFeedback] = useState(false);
 useEffect(() => {
 const id = pageIdParam ? parseInt(pageIdParam, 10) : NaN;
 
-```
+
 if (!Number.isNaN(id) && id > 0) {
   loadDocument({ pageId: id }).then((result) => {
     if (result.success) {
@@ -33,7 +33,7 @@ if (!Number.isNaN(id) && id > 0) {
     }
   });
 }
-```
+
 
 }, [pageIdParam]);
 
@@ -41,7 +41,7 @@ const handleCopyJson = useCallback(async () => {
 const str =
 typeof post === "string" ? post : JSON.stringify(post, null, 2);
 
-```
+
 try {
   await navigator.clipboard.writeText(str);
   setCopyFeedback(true);
@@ -49,7 +49,7 @@ try {
 } catch {
   setCopyFeedback(false);
 }
-```
+
 
 }, [post]);
 
@@ -58,7 +58,7 @@ typeof post === "string" ? post : JSON.stringify(post, null, 2);
 
 return ( <div className="flex gap-6 p-8"> <div className="flex min-h-[calc(100vh-4rem)] flex-1 flex-col">
 
-```
+
     {loadError && (
       <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
         {loadError}
