@@ -218,10 +218,10 @@ function Editor() {
           </div>
         </div>
 
-        <RichTextEditor
+        <RichTextContent
           key={pageId ?? `pending-${pageIdParam ?? "new"}`}
-          content={post}
-          onchange={onchange}
+          pageId={pageId ?? 0}
+          content={post as any}
           toolbarRight={
             <div className="flex items-center gap-2">
               {pageId != null && (
