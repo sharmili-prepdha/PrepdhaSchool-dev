@@ -16,7 +16,7 @@ import { Pencil } from "lucide-react";
 
 import "katex/dist/katex.min.css";
 
-import { Mcq } from "@/extensions/Mcq";
+import { Mcq } from "@/extensions/mcq";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
