@@ -1,6 +1,6 @@
 "use client";
 
-import RichTextContent from "@/components/rich-text-editor/rich-text-content"
+import { RichTextContent } from "@/components/rich-text-editor/rich-text-content"
 import { useCallback, useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { type Content, type JSONContent } from "@tiptap/react";
