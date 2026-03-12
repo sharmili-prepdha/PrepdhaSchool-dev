@@ -4,31 +4,9 @@ import { RichTextContent } from "@/components/rich-text-editor/rich-text-content
 import { useCallback, useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { type Content, type JSONContent } from "@tiptap/react";
-import { saveDocument } from "@/features/tiptap/actions/save-document.action";
 import { loadDocument } from "@/features/tiptap/actions/load-document.action";
-import type { TextbookPageMetadata } from "@/types/rich-text.types";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
-
-const emptyMetadata: TextbookPageMetadata = {
-grade: null,
-subject: null,
-textbookName: null,
-chapter: null,
-pageNumber: null,
-title: null,
-};
-
-function metadataToForm(meta: TextbookPageMetadata) {
-return {
-grade: meta.grade?.toString() ?? "",
-subject: meta.subject ?? "",
-textbookName: meta.textbookName ?? "",
-chapter: meta.chapter ?? "",
-pageNumber: meta.pageNumber?.toString() ?? "",
-title: meta.title ?? "",
-};
-}
 
 function Editor() {
 const router = useRouter();
@@ -60,7 +38,8 @@ if (!Number.isNaN(id) && id > 0) {
 }, [pageIdParam]);
 
 const handleCopyJson = useCallback(async () => {
-const str = typeof post === "string" ? post : JSON.stringify(post, null, 2);
+const str =
+typeof post === "string" ? post : JSON.stringify(post, null, 2);
 
 ```
 try {
@@ -74,7 +53,8 @@ try {
 
 }, [post]);
 
-const jsonString = typeof post === "string" ? post : JSON.stringify(post, null, 2);
+const jsonString =
+typeof post === "string" ? post : JSON.stringify(post, null, 2);
 
 return ( <div className="flex gap-6 p-8"> <div className="flex min-h-[calc(100vh-4rem)] flex-1 flex-col">
 
