@@ -112,17 +112,20 @@ return ( <div className="flex gap-6 p-8"> <div className="flex min-h-[calc(100vh
     </pre>
   </aside>
 </div>
-```
 
 );
 }
 
 export default function EditorPage() {
-return (
-<Suspense
-fallback={ <div className="flex items-center justify-center min-h-screen">
-Loading editor... </div>
-}
-> <Editor /> </Suspense>
-);
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          Loading editor...
+        </div>
+      }
+    >
+      <Editor />
+    </Suspense>
+  );
 }
