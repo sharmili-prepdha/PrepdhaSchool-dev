@@ -1,0 +1,386 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Board {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  subjects Subject[]
+}
+
+model School {
+  id            Int      @id @default(autoincrement())
+  keyword       String   @unique
+  name          String
+  logo_data_url String?
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+
+  user_counter Int @default(0) // used for generating login IDs
+
+  users                User[]
+  school_class_subject SchoolClassSubject[]
+}
+
+model Class {
+  id   Int    @id @db.SmallInt
+  name String @unique
+
+  class_subject ClassSubject[]
+}
+
+model Subject {
+  id        Int     @id @default(autoincrement())
+  board_id  Int
+  name      String
+  is_active Boolean @default(true)
+
+  board         Board          @relation(fields: [board_id], references: [id], onDelete: Cascade)
+  class_subject ClassSubject[]
+
+  @@unique([board_id, name])
+  @@index([board_id])
+}
+
+model ClassSubject {
+  id         Int @id @default(autoincrement())
+  class_id   Int @db.SmallInt
+  subject_id Int
+
+  class   Class   @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+
+  user_class_subject   UserClassSubject[]
+  school_class_subject SchoolClassSubject[]
+  books                Book[]
+
+  @@unique([class_id, subject_id])
+  @@index([class_id])
+  @@index([subject_id])
+}
+
+model SchoolClassSubject {
+  school_id        Int
+  class_subject_id Int
+
+  school        School       @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  class_subject ClassSubject @relation(fields: [class_subject_id], references: [id], onDelete: Cascade)
+
+  @@id([school_id, class_subject_id])
+  @@index([class_subject_id])
+}
+
+model UserClassSubject {
+  user_id          Int
+  class_subject_id Int
+
+  user          User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  class_subject ClassSubject @relation(fields: [class_subject_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, class_subject_id])
+}
+
+model User {
+  id                   Int      @id @default(autoincrement()) // only for internal use
+  school_id            Int
+  name                 String
+  login_id             String
+  email                String?
+  mobile               String?  @db.VarChar(15)
+  role                 Role
+  password_hash        String
+  must_change_password Boolean  @default(true)
+  is_active            Boolean  @default(true)
+  created_at           DateTime @default(now())
+
+  school                     School                     @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  user_class_subject         UserClassSubject[]
+  student_gamification_state StudentGamificationState[]
+  page_highlights            PageHighlight[]
+  student_topic_progress     StudentTopicProgress[]
+  student_page_progress      StudentPageProgress[]
+  student_topic_revisions    StudentTopicRevision[]
+  flashcards                Flashcard[]
+  studentFlashcardStates    StudentFlashcardState[]
+
+  @@unique([school_id, login_id])
+  @@index([school_id])
+  @@index([login_id])
+}
+
+// Content: Book → Chapter → Topic → Page
+
+model Book {
+  id               Int     @id @default(autoincrement())
+  class_subject_id Int
+  title            String
+  order_no         Int?
+  thumbnail_url    String?
+
+  class_subject ClassSubject @relation(fields: [class_subject_id], references: [id], onDelete: Cascade)
+  chapters      Chapter[]
+
+  @@index([class_subject_id])
+}
+
+model Chapter {
+  id       Int    @id @default(autoincrement())
+  book_id  Int
+  title    String
+  order_no Int?
+
+  book   Book    @relation(fields: [book_id], references: [id], onDelete: Cascade)
+  topics Topic[]
+
+  @@unique([book_id, order_no])
+  @@index([book_id])
+}
+
+model Topic {
+  id         Int    @id @default(autoincrement())
+  chapter_id Int
+  title      String
+  order_no   Int?
+
+  chapter                 Chapter                @relation(fields: [chapter_id], references: [id], onDelete: Cascade)
+  page                    Page[]
+  student_topic_progress  StudentTopicProgress[]
+  student_topic_revisions StudentTopicRevision[]
+  questions Question[]
+  
+  @@unique([chapter_id, order_no])
+  @@index([chapter_id])
+  flashcards Flashcard[]
+}
+
+
+model StudentRevisionNote {
+  id           Int      @id @default(autoincrement())
+  student_id   Int
+  school_id    Int
+  topic_id     Int
+  content_json Json
+  content_text String
+ 
+  @@index([student_id, school_id])
+}
+
+
+model Page {
+  id           Int      @id @default(autoincrement())
+  topic_id     Int
+  page_order   Int?
+  content_json Json?
+  content_html String?
+  content_text String?
+  is_published Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  topic           Topic                 @relation(fields: [topic_id], references: [id], onDelete: Cascade)
+  page_progress   StudentPageProgress[]
+  page_highlights PageHighlight[]
+
+  @@unique([topic_id, page_order])
+  @@index([topic_id, page_order])
+  @@index([is_published])
+}
+
+model PageHighlight {
+  id         String   @id @default(cuid())
+  page_id    Int
+  student_id Int
+  from_pos   Int
+  to_pos     Int
+  color      String?
+  created_at DateTime @default(now())
+
+  page    Page @relation(fields: [page_id], references: [id], onDelete: Cascade)
+  student User @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([page_id, student_id])
+}
+
+model XpRule {
+  activity_type        String @id
+  activity_displayname String
+  xp_points            Int
+}
+
+model StudentGamificationState {
+  student_id       Int       @id
+  total_xp         Int       @default(0)
+  current_streak   Int       @default(0) @db.SmallInt
+  longest_streak   Int       @default(0) @db.SmallInt
+  last_active_date DateTime? @db.Timestamptz
+
+  user User @relation(fields: [student_id], references: [id], onDelete: Cascade)
+}
+
+model StudentTopicProgress {
+  student_id       Int
+  topic_id         Int
+  class_subject_id Int
+
+  accuracy         Decimal? @db.Decimal(4,2)
+  last_activity_at DateTime?
+
+  student User  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  topic   Topic @relation(fields: [topic_id], references: [id], onDelete: Cascade)
+
+  @@id([student_id, topic_id])
+  @@index([topic_id])
+  @@index([class_subject_id])
+}
+
+model StudentPageProgress {
+  student_id       Int
+  page_id          Int
+  class_subject_id Int
+
+  is_completed Boolean   @default(false)
+  completed_at DateTime?
+
+  student User @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  page    Page @relation(fields: [page_id], references: [id], onDelete: Cascade)
+
+  @@id([student_id, page_id])
+  @@index([page_id])
+  @@index([class_subject_id])
+}
+
+model StudentTopicRevision {
+  id                       Int      @id @default(autoincrement())
+  student_id               Int
+  topic_id                 Int
+  current_interval_in_days Int
+  last_interval_at         DateTime @db.Date
+  next_revision_at         DateTime @db.Date
+  revision_counter         Int      @default(1)
+  is_pending               Boolean  @default(true)
+
+  student User  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  topic   Topic @relation(fields: [topic_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id])
+  @@index([topic_id])
+  @@index([current_interval_in_days])
+}
+
+// =============================================================================
+// Flashcard
+// =============================================================================
+// Represents a flashcard with a question and answer stored as flexible JSON.
+// Flashcards can be either:
+//   - Global (studentId = null): visible to all students under a topic
+//   - Student-specific (studentId set): private cards created by a student
+// =============================================================================
+model Flashcard {
+  id                Int      @id @default(autoincrement())
+  topic_id          Int
+  student_id        Int? // nullable if global
+  question          Json
+  answer            Json
+  scope             FlashcardScope
+  create_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  // Relations
+  topic   Topic @relation(fields: [topic_id], references: [id], onDelete: Cascade)
+  student User? @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  studentFlashcardState StudentFlashcardState[]
+
+  @@index([topic_id])
+  @@index([student_id])
+}
+
+model StudentFlashcardState {
+  id                    Int           @id @default(autoincrement())
+  student_id            Int
+  flashcard_id          Int
+  repetition            Int
+  lapses                Int
+  interval_factor       Int           @default(60)
+  last_quality          ReviewQuality
+  next_review_at        DateTime
+  last_reviewed_at      DateTime?
+  created_at            DateTime
+  updated_at            DateTime      @updatedAt
+
+  // Relations
+  student   User      @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  flashcard Flashcard @relation(fields: [flashcard_id], references: [id], onDelete: Cascade)
+
+  @@unique([student_id, flashcard_id]) // prevents duplicate state
+  @@index([student_id, next_review_at])
+}
+
+// =============================================================================
+// Question bank (questions and answer options)
+// =============================================================================
+model Question {
+  id          String @id @default(cuid()) @map("question_id")
+  topic_id    Int                         
+  type        QuestionType                @map("question_type")
+  content     Json                        
+  explanation Json?                       
+  is_active   Boolean  @default(true)     
+  created_at  DateTime @default(now())    
+  updated_at  DateTime @updatedAt         
+
+  topic       Topic @relation(fields: [topic_id], references: [id], onDelete: Cascade)
+  options     Option[]
+
+  @@index([topic_id])
+  @@index([type])
+}
+
+model Option {
+  id            String @id @default(cuid()) @map("option_id")
+  question_id   String                   
+  content       Json                      
+  isCorrect    Boolean @default(false)  @map("is_correct")  
+  display_order Int                      
+  created_at    DateTime @default(now()) 
+
+  question      Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  @@index([question_id])
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+enum Role {
+  student
+  teacher
+  principal
+  admin
+  superadmin
+}
+
+enum ReviewQuality {
+  again
+  hard
+  good
+  easy
+}
+
+enum FlashcardScope {
+  personal  
+  ai        
+  global    
+}
+
+enum QuestionType {
+  MCQ
+  MSQ
+  TRUE_FALSE
+}

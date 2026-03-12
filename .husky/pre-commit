@@ -1,0 +1,9 @@
+# Ensure Node.js is in PATH (Git from Cursor/VS Code uses a minimal PATH)
+export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+# Load nvm if present
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
+
+# Run type check first
+npm run type-check
+
+./node_modules/.bin/lint-staged

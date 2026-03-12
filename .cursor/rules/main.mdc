@@ -1,0 +1,644 @@
+# Cursor Rules — Next.js Production Application
+
+## Tech Stack
+
+- **Runtime**: Bun
+- **Framework**: Next.js 14+ (App Router)
+- **Language**: TypeScript (strict mode)
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui (primary component library)
+- **Forms**: React Hook Form + Zod
+- **ORM**: Prisma
+- **Package Manager**: Bun
+
+---
+
+## 0. General Command Rules
+
+- **Always use `bun` for every terminal command** — never use `npm`, `yarn`, or `pnpm`.
+- Installing packages: `bun add <pkg>`, dev deps: `bun add -d <pkg>`
+- Running scripts: `bun run <script>` or `bun <script>`
+- Executing binaries: `bunx <binary>` (never `npx`)
+- Installing shadcn components: `bunx shadcn@latest add <component>`
+
+```sh
+# ✅ Good
+bun add zod
+bun run dev
+bunx prisma migrate dev
+bunx shadcn@latest add button
+
+# ❌ Bad
+npm install zod
+npx prisma migrate dev
+yarn dev
+```
+
+---
+
+## 1. TypeScript
+
+- Always use `strict: true` in `tsconfig.json`.
+- Never use `any`. Use `unknown` and narrow types explicitly.
+- Prefer `type` over `interface` unless declaration merging is needed.
+- Use `satisfies` operator to validate object literals against types.
+- Always type function return values explicitly for exported functions.
+- Use `const` assertions (`as const`) for static data structures.
+- Prefer discriminated unions over optional fields where possible.
+- Never use non-null assertion (`!`) — handle nullability explicitly.
+
+```ts
+// ✅ Good
+type ApiResponse<T> = { success: true; data: T } | { success: false; error: string };
+
+// ❌ Bad
+const data = response.data!;
+```
+
+---
+
+## 2. Folder Structure
+
+```
+/
+├── app/                        # Next.js App Router
+│   ├── (auth)/                 # Route group: auth pages
+│   │   ├── login/
+│   │   │   └── page.tsx
+│   │   └── register/
+│   │       └── page.tsx
+│   ├── (dashboard)/            # Route group: protected pages
+│   │   ├── layout.tsx
+│   │   └── dashboard/
+│   │       └── page.tsx
+│   ├── api/                    # API Route Handlers
+│   │   └── [resource]/
+│   │       └── route.ts
+│   ├── layout.tsx              # Root layout
+│   ├── page.tsx                # Home page
+│   ├── loading.tsx             # Global loading UI
+│   ├── error.tsx               # Global error UI
+│   └── not-found.tsx
+│
+├── components/
+│   ├── ui/                     # shadcn/ui generated components (do not edit manually)
+│   └── [feature]/              # Feature-specific components built on top of shadcn/ui
+│
+├── lib/
+│   ├── prisma.ts               # Prisma client singleton
+│   ├── auth.ts                 # Auth helpers
+│   └── utils.ts                # Utility functions (cn, formatters, etc.)
+│
+├── hooks/                      # Custom React hooks (use*.ts)
+├── actions/                    # Next.js Server Actions (*.action.ts)
+├── schemas/                    # Zod schemas (*.schema.ts)
+├── types/                      # Global TypeScript types (*.types.ts)
+├── constants/                  # App-wide constants (*.constants.ts)
+├── config/                     # App config (site.config.ts, etc.)
+│
+├── prisma/
+│   ├── schema.prisma
+│   ├── seed.ts
+│   └── migrations/
+│
+├── public/
+│   ├── images/
+│   └── icons/
+│
+├── styles/
+│   └── globals.css
+│
+├── .env
+├── .env.example
+├── .cursorrules
+├── biome.json                  # Or eslint + prettier config
+├── tailwind.config.ts
+├── next.config.ts
+└── tsconfig.json
+```
+
+---
+
+## 3. Naming Conventions
+
+### Files & Directories
+
+- Use `kebab-case` for all files and directories: `user-profile.tsx`, `auth-utils.ts`.
+- Next.js special files use lowercase: `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `route.ts`.
+- Server Actions: `create-user.action.ts`
+- Zod Schemas: `user.schema.ts`
+- Types: `user.types.ts`
+- Constants: `app.constants.ts`
+
+### Variables & Functions
+
+- `camelCase` for variables and functions: `getUserById`, `isLoading`.
+- `PascalCase` for React components and TypeScript types/interfaces: `UserCard`, `UserProfile`.
+- `SCREAMING_SNAKE_CASE` for constants: `MAX_FILE_SIZE`, `API_BASE_URL`.
+- Prefix boolean variables with `is`, `has`, `can`, `should`: `isLoading`, `hasError`.
+- Prefix custom hooks with `use`: `useUserProfile`, `useDebounce`.
+- Prefix server actions clearly: `createUser`, `updatePost`, `deleteComment`.
+- Event handlers prefixed with `handle`: `handleSubmit`, `handleChange`.
+
+### Components
+
+- One component per file.
+- File name must match the component name exactly: `UserCard.tsx` exports `UserCard`.
+- Co-locate component styles and tests with the component if applicable.
+
+---
+
+## 4. UI Components — shadcn/ui (Primary Rule)
+
+- **Always prefer shadcn/ui components** before writing any custom UI primitives.
+- Before building any UI element (button, input, dialog, table, form, etc.), check if a shadcn/ui component exists and use it.
+- Install shadcn/ui components on demand with `bunx shadcn@latest add <component>`.
+- shadcn/ui components live in `components/ui/` — **do not manually edit these files**; extend via composition instead.
+- Build feature components in `components/[feature]/` by composing shadcn/ui primitives.
+- Use shadcn/ui's `Form`, `FormField`, `FormItem`, `FormLabel`, `FormControl`, `FormMessage` components for all forms — always paired with React Hook Form + Zod.
+
+```tsx
+// ✅ Good — use shadcn/ui primitives
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
+
+// ❌ Bad — rolling a custom button when shadcn/ui has one
+export function MyButton({ children }: { children: React.ReactNode }) {
+  return (
+    <button className="rounded bg-blue-600 px-4 py-2 text-white">
+      {children}
+    </button>
+  );
+}
+```
+
+### shadcn/ui + React Hook Form + Zod (Standard Form Pattern)
+
+```tsx
+// schemas/login.schema.ts
+import { z } from "zod";
+
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email"),
+  password: z.string().min(8, "Min 8 characters"),
+});
+
+export type LoginFormValues = z.infer<typeof loginSchema>;
+
+// components/auth/login-form.tsx
+"use client";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
+import { loginSchema, type LoginFormValues } from "@/schemas/login.schema";
+
+export function LoginForm() {
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+  });
+
+  const onSubmit = async (data: LoginFormValues) => {
+    // call server action
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl>
+                <Input placeholder="you@example.com" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Password</FormLabel>
+              <FormControl>
+                <Input type="password" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit" disabled={form.formState.isSubmitting}>
+          Login
+        </Button>
+      </form>
+    </Form>
+  );
+}
+```
+
+### Common shadcn/ui Component → Install Command Reference
+
+| UI Need         | Component               | Install Command                              |
+|-----------------|-------------------------|----------------------------------------------|
+| Button          | `Button`                | `bunx shadcn@latest add button`              |
+| Text input      | `Input`                 | `bunx shadcn@latest add input`               |
+| Form wrapper    | `Form`                  | `bunx shadcn@latest add form`                |
+| Modal/overlay   | `Dialog`                | `bunx shadcn@latest add dialog`              |
+| Notifications   | `Sonner` / `Toast`      | `bunx shadcn@latest add sonner`              |
+| Dropdown menu   | `DropdownMenu`          | `bunx shadcn@latest add dropdown-menu`       |
+| Data table      | `Table`                 | `bunx shadcn@latest add table`               |
+| Select input    | `Select`                | `bunx shadcn@latest add select`              |
+| Checkbox        | `Checkbox`              | `bunx shadcn@latest add checkbox`            |
+| Toggle/Switch   | `Switch`                | `bunx shadcn@latest add switch`              |
+| Date picker     | `Calendar` + `Popover`  | `bunx shadcn@latest add calendar popover`    |
+| Tabs            | `Tabs`                  | `bunx shadcn@latest add tabs`                |
+| Cards           | `Card`                  | `bunx shadcn@latest add card`                |
+| Alerts/banners  | `Alert`                 | `bunx shadcn@latest add alert`               |
+| Skeleton loader | `Skeleton`              | `bunx shadcn@latest add skeleton`            |
+| Sidebar         | `Sidebar`               | `bunx shadcn@latest add sidebar`             |
+| Avatar          | `Avatar`                | `bunx shadcn@latest add avatar`              |
+| Badge           | `Badge`                 | `bunx shadcn@latest add badge`               |
+| Breadcrumb      | `Breadcrumb`            | `bunx shadcn@latest add breadcrumb`          |
+| Command palette | `Command`               | `bunx shadcn@latest add command`             |
+
+---
+
+## 5. React & Next.js Patterns
+
+### Components
+
+- Default to Server Components. Only use `"use client"` when absolutely necessary (interactivity, browser APIs, hooks).
+- Keep `"use client"` components as small as possible — push them to the leaves of the component tree.
+- Never fetch data inside Client Components — fetch in Server Components and pass as props.
+- Use `React.FC` sparingly; prefer plain function declarations with explicit return types.
+
+```tsx
+// ✅ Good - Server Component
+async function UserPage({ params }: { params: { id: string } }) {
+  const user = await getUserById(params.id);
+  return <UserCard user={user} />;
+}
+
+// ❌ Bad - useEffect data fetching
+useEffect(() => { fetch('/api/user').then(...) }, []);
+```
+
+### Server Actions
+
+- All mutations go through Server Actions in `/actions/`.
+- Always validate inputs with Zod inside the action.
+- Return a typed response object; never throw to the client.
+
+```ts
+// actions/create-user.action.ts
+"use server";
+import { createUserSchema } from "@/schemas/user.schema";
+
+export async function createUser(formData: FormData) {
+  const parsed = createUserSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { success: false, errors: parsed.error.flatten().fieldErrors };
+  }
+  // ...db logic
+  return { success: true };
+}
+```
+
+### Data Fetching
+
+- Fetch data in Server Components using `async/await` directly.
+- Use `cache()` from React or `unstable_cache` from Next.js for expensive queries.
+- Colocate data fetching with the component that needs it.
+
+---
+
+## 6. Zod
+
+- Every external input must be validated with Zod: API request bodies, form data, env variables, URL params.
+- Keep schemas in `/schemas/` — never inline complex schemas in components or routes.
+- Use `z.infer<typeof schema>` for type derivation — never duplicate type definitions.
+- Use `.safeParse()` for non-throwing validation; use `.parse()` only where exceptions are acceptable.
+- Validate environment variables at startup:
+
+```ts
+// lib/env.ts
+import { z } from "zod";
+
+const envSchema = z.object({
+  DATABASE_URL: z.string().url(),
+  NEXTAUTH_SECRET: z.string().min(32),
+  NODE_ENV: z.enum(["development", "test", "production"]),
+});
+
+export const env = envSchema.parse(process.env);
+```
+
+---
+
+## 7. Prisma
+
+- Export a single Prisma client instance from `lib/prisma.ts` using a global singleton pattern.
+
+```ts
+// lib/prisma.ts
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["query", "error"] : ["error"],
+  });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+```
+
+- Always run migrations in CI before deploying: `bunx prisma migrate deploy`.
+- Never use `prisma db push` in production — always use migrations.
+- Use `prisma.$transaction` for operations that must be atomic.
+- Model naming: `PascalCase` singular (`User`, `BlogPost`).
+- Field naming: `camelCase` (`createdAt`, `userId`).
+- Always include `createdAt DateTime @default(now())` and `updatedAt DateTime @updatedAt` on every model.
+- Use `@@index` for fields used in frequent queries.
+
+```prisma
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  posts     Post[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+```
+
+---
+
+## 8. Tailwind CSS
+
+- Use the `cn()` utility (from `clsx` + `tailwind-merge`) for conditional class merging — this is already set up by shadcn/ui in `lib/utils.ts`.
+
+```ts
+// lib/utils.ts
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+- Never use inline styles (`style={{}}`). Everything goes in Tailwind classes.
+- Define design tokens (colors, spacing, fonts) in `tailwind.config.ts` — never hardcode hex values.
+- Order Tailwind classes: layout → sizing → spacing → typography → colors → effects → responsive → states.
+- Avoid arbitrary values (`[#fff]`, `[32px]`) — if needed more than once, add to config.
+- Use `@layer components` in `globals.css` for repeated multi-class patterns only.
+- shadcn/ui uses CSS variables for theming — always customize via `globals.css` CSS variables, not by overriding Tailwind config directly.
+
+---
+
+## 9. API Route Handlers
+
+- Place all API routes under `app/api/`.
+- Always validate request body with Zod.
+- Return typed `NextResponse` with appropriate HTTP status codes.
+- Never expose raw Prisma errors to the client.
+- Use a consistent response envelope.
+
+```ts
+// app/api/users/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+
+const createUserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+});
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const parsed = createUserSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, errors: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
+    }
+
+    const user = await prisma.user.create({ data: parsed.data });
+    return NextResponse.json({ success: true, data: user }, { status: 201 });
+  } catch (error) {
+    logger.error(error);
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
+  }
+}
+```
+
+---
+
+## 10. Error Handling
+
+- Use a consistent error boundary pattern (`error.tsx` at appropriate layout levels).
+- Use the shadcn/ui `Alert` component to surface non-fatal errors inside UI.
+- Log errors server-side with context; never expose stack traces to the client.
+- Wrap async Server Component logic in try/catch and show meaningful fallbacks.
+- Prefer `Result` patterns for server actions (return `{ success, data, error }` objects).
+
+---
+
+## 11. Performance
+
+- Use `next/image` for all images — never use `<img>`.
+- Use `next/font` for fonts — never load from a CDN in CSS.
+- Use `next/link` for all internal navigation.
+- Lazy load heavy Client Components with `dynamic(() => import(...), { ssr: false })`.
+- Memoize expensive computations with `useMemo`; stable callbacks with `useCallback` (only when necessary).
+- Prefer streaming with `Suspense` over loading skeletons manually; use shadcn/ui `Skeleton` for skeleton states.
+
+---
+
+## 12. Environment Variables
+
+- Never commit `.env` — always commit `.env.example` with dummy values.
+- Validate all env variables using Zod at startup (see `/lib/env.ts`).
+- Only prefix browser-safe variables with `NEXT_PUBLIC_`.
+- Group env vars by concern in `.env.example` with comments.
+
+---
+
+## 13. Linting & Formatting
+
+### Recommended: Biome (fast, zero-config, single tool)
+
+```json
+// biome.json
+{
+  "$schema": "https://biomejs.dev/schemas/1.8.0/schema.json",
+  "organizeImports": { "enabled": true },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": { "noUnusedVariables": "error" },
+      "suspicious": { "noExplicitAny": "error" }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  }
+}
+```
+
+### Or: ESLint + Prettier
+
+- Extend `eslint-config-next`, `plugin:@typescript-eslint/recommended`.
+- `@typescript-eslint/no-explicit-any: error`
+- `@typescript-eslint/no-unused-vars: error`
+- `import/order` enforced with groups: builtin → external → internal → relative.
+- Prettier with `printWidth: 100`, `singleQuote: false`, `trailingComma: "es5"`.
+
+### Package.json scripts
+
+```json
+{
+  "scripts": {
+    "dev": "next dev --turbo",
+    "build": "next build",
+    "start": "next start",
+    "lint": "biome check .",
+    "lint:fix": "biome check --apply .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "bunx prisma generate",
+    "db:migrate": "bunx prisma migrate dev",
+    "db:push": "bunx prisma db push",
+    "db:seed": "bun prisma/seed.ts",
+    "db:studio": "bunx prisma studio"
+  }
+}
+```
+
+---
+
+## 14. Git & Commit Conventions
+
+- Use Conventional Commits: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`, `perf:`.
+- Keep commits atomic — one logical change per commit.
+- Branch naming: `feat/user-auth`, `fix/login-redirect`, `chore/update-deps`.
+- Never commit directly to `main` — use PRs with at least one review.
+- Run `typecheck` and `lint` in a pre-commit hook via `lefthook` or `husky`.
+
+```yaml
+# lefthook.yml
+pre-commit:
+  commands:
+    typecheck:
+      run: bun run typecheck
+    lint:
+      run: bun run lint
+```
+
+---
+
+## 15. Security
+
+- Sanitize all user inputs server-side (Zod + Prisma parameterized queries handle most of this).
+- Never store secrets in client-side code or `NEXT_PUBLIC_` env vars.
+- Use `httpOnly`, `secure`, `sameSite=strict` for auth cookies.
+- Rate-limit API routes for auth endpoints.
+- Use `Content-Security-Policy` headers via `next.config.ts`.
+- Validate `params` and `searchParams` in page components with Zod before using them.
+
+---
+
+## 16. Testing (when applicable)
+
+- Use **Vitest** for unit/integration tests (works natively with Bun): `bun add -d vitest`.
+- Use **Playwright** for E2E tests: `bun add -d @playwright/test`.
+- Test filenames: `user.test.ts`, `login-form.test.tsx`.
+- Co-locate unit tests with the source file, or use a top-level `__tests__/` directory.
+- Mock Prisma with `vitest-mock-extended` or `@quramy/prisma-fabbrica`.
+- Never test implementation details — test behavior and outcomes.
+
+---
+
+## 17. Accessibility
+
+- Every `<img>` must have a descriptive `alt` attribute.
+- Use semantic HTML: `<nav>`, `<main>`, `<section>`, `<article>`, `<button>`, `<label>`.
+- shadcn/ui components are built on Radix UI and are accessible by default — do not override `aria-*` or role attributes without a strong reason.
+- Ensure color contrast meets WCAG AA (4.5:1 for text).
+- All interactive elements must be keyboard navigable and focusable.
+- Use `aria-*` attributes only when semantic HTML is insufficient.
+
+---
+
+## 18. General Code Quality Rules
+
+- Avoid files exceeding 300 lines — split into smaller modules.
+- Functions should do one thing. If a function needs a comment to explain what it does, split it.
+- No commented-out code in commits.
+- Prefer early returns over deeply nested conditionals.
+- Co-locate related code — keep feature logic close to where it's used.
+- Never use magic numbers — define them as named constants.
+- Imports order: 1) React/Next 2) Third-party 3) Internal aliases (`@/`) 4) Relative imports.
+
+```ts
+// ✅ Import order
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { Button } from "@/components/ui/button";
+import { prisma } from "@/lib/prisma";
+import { UserCard } from "./user-card";
+```
+
+---
+
+## 19. Path Aliases
+
+Configure in `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
+}
+```
+
+Use `@/` for all non-relative imports. Never use `../../../` more than one level deep.
+
+---
+
+## 20. Key Principles
+
+1. **Server-first**: Default to Server Components; add `"use client"` only when required.
+2. **shadcn/ui first**: Always reach for a shadcn/ui component before writing custom UI.
+3. **Bun everywhere**: Every install, run, and exec command uses `bun` / `bunx` — no exceptions.
+4. **Type-safe everywhere**: Zod at boundaries, TypeScript strict throughout, Prisma generated types.
+5. **Single source of truth**: One schema → Zod type → RHF type. Never duplicate.
+6. **Explicit over implicit**: No magic. Clear names, clear types, clear data flow.
+7. **Fail fast**: Validate early (env vars, inputs, params). Surface errors at the right layer.
+8. **Consistency**: Follow these rules across the entire codebase — no exceptions without team agreement.

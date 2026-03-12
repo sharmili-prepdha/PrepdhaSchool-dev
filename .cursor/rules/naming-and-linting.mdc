@@ -1,0 +1,26 @@
+---
+description: Naming conventions and linting — must pass or commit is blocked
+alwaysApply: true
+---
+
+# Naming Conventions & Linting
+
+ESLint naming rules and lint are enforced. **Pre-commit runs `lint-staged` (ESLint on staged files). If lint fails, the commit is blocked.**
+
+## Naming conventions (enforced as errors)
+
+- **Variables, parameters**: `camelCase` (or `UPPER_CASE` for constants). Leading underscore allowed (e.g. `_unused`).
+- **Functions / methods**: `camelCase` for helpers; `PascalCase` for React components; `UPPER_CASE` for Next.js route handlers (e.g. `GET`, `POST`).
+- **Classes, interfaces, types, enums**: `PascalCase`.
+- **Imports**: `camelCase`, `PascalCase`, or `UPPER_CASE` (e.g. `Link`, `LoginForm`, `COOKIE_NAME`).
+- **Object/type properties**: No format enforced (e.g. Prisma `school_id` is fine).
+- **Double-underscore names**: Allowed (e.g. `__prisma`).
+
+## Before committing
+
+- Run `npm run lint` (or `npm run lint:fix`) and fix any errors.
+- Pre-commit will run ESLint on staged `*.ts` and `*.tsx`; fix reported issues if the commit is rejected.
+
+## Reference
+
+Full rule config: `eslint.config.mjs` (`@typescript-eslint/naming-convention` and other rules).
